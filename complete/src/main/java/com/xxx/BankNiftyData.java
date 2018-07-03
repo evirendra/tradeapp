@@ -12,7 +12,8 @@ public class BankNiftyData {
 	private static final int range = 5;
 	private List<BankNiftyOptionData> callOptionData = new ArrayList<>();
 	private List<BankNiftyOptionData> putOptionData = new ArrayList<>();
-
+	private BankNiftyPosition  bankNiftyPosition;
+	
 	public Number getLtpPrice() {
 		return ltpPrice;
 	}
@@ -84,6 +85,14 @@ public class BankNiftyData {
 
 	public void setPutOptionData(List<BankNiftyOptionData> putOptionData) {
 		this.putOptionData = putOptionData;
+	}
+
+	public BankNiftyPosition getBankNiftyPosition() {
+		return bankNiftyPosition;
+	}
+
+	public void setBankNiftyPosition(BankNiftyPosition bankNiftyPosition) {
+		this.bankNiftyPosition = bankNiftyPosition;
 	}
 	
 	

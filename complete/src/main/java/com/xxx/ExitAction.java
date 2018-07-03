@@ -1,5 +1,8 @@
 package com.xxx;
 
+import org.springframework.util.ReflectionUtils;
+import org.springframework.util.StringUtils;
+
 public class ExitAction {
 
 	private String callOption;
@@ -7,9 +10,6 @@ public class ExitAction {
 	private String putOption;
 	private String putOptionQty;
 	private boolean exitActionEnabled;
-	
-	
-
 
 	public boolean isExitActionEnabled() {
 		return exitActionEnabled;
@@ -30,7 +30,6 @@ public class ExitAction {
 	public String getCallOptionQty() {
 		return callOptionQty;
 	}
-	
 
 	public void setCallOptionQty(String callOptionQty) {
 		this.callOptionQty = callOptionQty;
@@ -52,5 +51,19 @@ public class ExitAction {
 		this.putOptionQty = putOptionQty;
 	}
 
+	public void populateExitAction(String callOptionSymbol, String callOptionQty, String putOptionSymbol,
+			String putOptionQty, boolean exitActionEnabled) {
+		this.setCallOption(callOptionSymbol);
+		this.setCallOptionQty(callOptionQty);
+		this.setPutOption(putOptionSymbol);
+		this.setPutOptionQty(putOptionQty);
+		this.setExitActionEnabled(exitActionEnabled);
+	}
 	
+	@Override
+	public String toString() {
+		String str =  StringUtils.arrayToCommaDelimitedString(new String[] {callOption, callOptionQty, putOption, putOptionQty, ""+ exitActionEnabled});
+		return str;
+	}
+
 }
