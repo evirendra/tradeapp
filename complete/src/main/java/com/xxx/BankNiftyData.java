@@ -5,6 +5,8 @@ import java.util.List;
 
 import org.springframework.util.StringUtils;
 
+import com.qrtz.cache.Cache;
+
 public class BankNiftyData {
 	private static final String exchange = "NSE";
 	private static final String symbol = "NIFTY BANK";
@@ -64,6 +66,8 @@ public class BankNiftyData {
 		List<String> callOptionInstrns = populateCallOptionData();
 		List<String> putOptionData = populatePutOptionData();
 
+		Cache.subscribe(callOptionInstrns);
+		Cache.subscribe(putOptionData);
 		String callInstrns = StringUtils.collectionToDelimitedString(callOptionInstrns, "&i=");
 		String putInstrns = StringUtils.collectionToDelimitedString(putOptionData, "&i=");
 

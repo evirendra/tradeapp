@@ -10,6 +10,8 @@ public class ExitAction {
 	private String putOption;
 	private String putOptionQty;
 	private boolean exitActionEnabled;
+	private boolean sellIfTotalReachesFlag;
+	private String sellIfTotalReachesAmount;
 
 	public boolean isExitActionEnabled() {
 		return exitActionEnabled;
@@ -52,18 +54,40 @@ public class ExitAction {
 	}
 
 	public void populateExitAction(String callOptionSymbol, String callOptionQty, String putOptionSymbol,
-			String putOptionQty, boolean exitActionEnabled) {
+			String putOptionQty, boolean exitActionEnabled, boolean sellIfTotalReachesFlag, String sellIfTotalReachesAmount) {
 		this.setCallOption(callOptionSymbol);
 		this.setCallOptionQty(callOptionQty);
 		this.setPutOption(putOptionSymbol);
 		this.setPutOptionQty(putOptionQty);
 		this.setExitActionEnabled(exitActionEnabled);
+		this.setSellIfTotalReachesFlag(sellIfTotalReachesFlag);
+		if(sellIfTotalReachesFlag) {
+			this.setSellIfTotalReachesAmount(sellIfTotalReachesAmount);
+		}
 	}
 	
 	@Override
 	public String toString() {
-		String str =  StringUtils.arrayToCommaDelimitedString(new String[] {callOption, callOptionQty, putOption, putOptionQty, ""+ exitActionEnabled});
+		String str =  StringUtils.arrayToCommaDelimitedString(new String[] {callOption, callOptionQty, putOption, putOptionQty, ""+ exitActionEnabled, ""+sellIfTotalReachesFlag, sellIfTotalReachesAmount});
 		return str;
 	}
+
+	public boolean isSellIfTotalReachesFlag() {
+		return sellIfTotalReachesFlag;
+	}
+
+	public void setSellIfTotalReachesFlag(boolean sellIfTotalReachesFlag) {
+		this.sellIfTotalReachesFlag = sellIfTotalReachesFlag;
+	}
+
+	public String getSellIfTotalReachesAmount() {
+		return sellIfTotalReachesAmount;
+	}
+
+	public void setSellIfTotalReachesAmount(String sellIfTotalReachesAmount) {
+		this.sellIfTotalReachesAmount = sellIfTotalReachesAmount;
+	}
+	
+	
 
 }

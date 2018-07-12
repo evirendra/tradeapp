@@ -4,15 +4,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
-
 import org.apache.commons.codec.digest.DigestUtils;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -20,12 +16,13 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
+
+import com.qrtz.cache.Cache;
 
 @RestController
 
@@ -35,13 +32,6 @@ public class LoginController {
 
 	// private static final String API_KEY="hes00cdr4giilrsk";
 	private static final Logger logger = LoggerFactory.getLogger(LoginController.class);
-	private static final String API_KEY = "7ff4ape1tn1i1ni5";
-
-	private static final String API_SECRET = "rjgxz2ey6xc1qf3rw44lr51tjwe86czy";
-	
-	private static final String ACCESS_TOKEN = "ACCESS_TOKEN";
-
-	private String accessToken = null;
 
 	@RequestMapping("/api/hello")
 	@CrossOrigin(origins = { "http://localhost:4200" })
@@ -58,7 +48,7 @@ public class LoginController {
 		headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 		Map<String, String> params = new HashMap<>();
 		params.put("v", "3");
-		params.put("api_key", API_KEY);
+		params.put("api_key", KeyCache.getAPIKey());
 		HttpMethod httpMethod = HttpMethod.POST;
 
 		ResponseEntity<String> response = fetchResponse(loginURL, headers, params, httpMethod);
@@ -68,10 +58,9 @@ public class LoginController {
 
 	@RequestMapping("/api/home")
 	@CrossOrigin(origins = { "http://localhost:4200" })
-	public ResponseEntity<String> home(@RequestParam(value = "request_token") String requestToken, HttpServletRequest httpRequest)
-			throws JSONException {
+	public ResponseEntity<String> home(@RequestParam(value = "request_token") String requestToken) throws JSONException {
 
-		String hashableText = API_KEY + requestToken + API_SECRET;
+		String hashableText = KeyCache.getAPIKey() + requestToken + KeyCache.getAPISecretKey();
 		String sha256hex = DigestUtils.sha256Hex(hashableText);
 		String SessionTokenURL = "https://api.kite.trade/session/token";
 
@@ -79,7 +68,7 @@ public class LoginController {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 		MultiValueMap<String, String> map = new LinkedMultiValueMap<String, String>();
-		map.add("api_key", API_KEY);
+		map.add("api_key", KeyCache.getAPIKey());
 		map.add("request_token", requestToken);
 		map.add("checksum", sha256hex);
 		HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<MultiValueMap<String, String>>(map, headers);
@@ -89,12 +78,9 @@ public class LoginController {
 
 		JSONObject jsonObject = new JSONObject(jsonSessionInfo);
 		JSONObject dataObject = (JSONObject) jsonObject.get("data");
-		accessToken = (String) dataObject.get("access_token");
-		HttpSession session = httpRequest.getSession();
-		session.setAttribute(ACCESS_TOKEN, accessToken);
-		logger.info("ACCESS_TOKEN: " + accessToken);
-		logger.info("API_KEY: " + API_KEY);
-		logger.info("API_SECRET: " + API_SECRET);
+		String accessToken = (String) dataObject.get("access_token");
+		KeyCache.addAccessTokenKey(accessToken);
+		logger.info("KeyCache :" + KeyCache.convertToString() );
 		// ResponseEntity<String> responseforLTP = fetchLTP(accessToken);
 		return response;
 
@@ -102,40 +88,57 @@ public class LoginController {
 
 	@RequestMapping("/api/bankNiftyData")
 	@CrossOrigin(origins = { "http://localhost:4200" })
-	public BankNiftyData bankNiftyData(HttpServletRequest httpRequest) throws JSONException, InterruptedException {
+	public BankNiftyData bankNiftyData() throws JSONException, InterruptedException {
 
 		BankNiftyData bankNiftyData = new BankNiftyData();
 
-		ResponseEntity<String> response = fetchLTP(bankNiftyData.getInstrumentName());
+//		ResponseEntity<String> response = fetchLTP(bankNiftyData.getInstrumentName());
+//		fillBankNiftyLtpPrice(bankNiftyData, response);
+		Cache.subscribe(bankNiftyData.getInstrumentName());
+		Thread.sleep(2000);
+		bankNiftyData.setLtpPrice(Cache.get(bankNiftyData.getInstrumentName()));
 
-		fillBankNiftyLtpPrice(bankNiftyData, response);
-
-		Thread.sleep(1000);
-		String ltpURL = "https://api.kite.trade/quote/ltp?" + bankNiftyData.populateOptionData();
-		ResponseEntity<String> optionResponse = fetchLTPFromURL(ltpURL);
-
-		fillLastPriceOptionData(bankNiftyData, optionResponse);
-		validateAndPerformExit(bankNiftyData);
-		HttpSession session = httpRequest.getSession();
-		logger.info("Access Token From Session: " + session.getAttribute(ACCESS_TOKEN));
+		String populateOptionData = bankNiftyData.populateOptionData();
+//		String ltpURL = "https://api.kite.trade/quote/ltp?" + populateOptionData;
+//		ResponseEntity<String> optionResponse = fetchLTPFromURL(ltpURL);
+		Thread.sleep(2000);
+//		fillLastPriceOptionData(bankNiftyData, optionResponse);
+		fillLastPriceOptionData(bankNiftyData);
+		validateAndPerformSellORExit(bankNiftyData);
+		// logger.info("Access Token From Session: " +
+		// session.getAttribute(ACCESS_TOKEN));
 		return bankNiftyData;
 
 	}
 
-	private void validateAndPerformExit(BankNiftyData bankNiftyData) {
+	private void validateAndPerformSellORExit(BankNiftyData bankNiftyData) {
 		ExitAction exitAction = ExitCache.getExitAction();
 		if (exitAction.isExitActionEnabled()) {
-			boolean shouldExit = ExitCache.shouldExit(bankNiftyData);
+			int action = ExitCache.determineAction(bankNiftyData);
 
-			if (shouldExit) {
+			if (action == 1) {
 				logger.info("Exit Condition triggerd at :" + bankNiftyData.getLtpPrice());
-				
-				String callInstrumentSymbol = BankNiftyOptionData.getInstrumentName(exitAction.getCallOption(),true);
-				String putInstrumentSymbol = BankNiftyOptionData.getInstrumentName(exitAction.getPutOption(),false);
+
+				String callInstrumentSymbol = BankNiftyOptionData.getInstrumentName(exitAction.getCallOption(), true);
+				String putInstrumentSymbol = BankNiftyOptionData.getInstrumentName(exitAction.getPutOption(), false);
 				placeBuyOrder(callInstrumentSymbol, exitAction.getCallOptionQty());
 				placeBuyOrder(putInstrumentSymbol, exitAction.getPutOptionQty());
 				exitAction.setExitActionEnabled(false);
 				logger.info("Exited");
+			}
+			if (action == 2) {
+				logger.info("Sell Condition triggerd at :" + bankNiftyData.getLtpPrice());
+
+				String callInstrumentSymbol = BankNiftyOptionData.getInstrumentName(exitAction.getCallOption(), true);
+				String putInstrumentSymbol = BankNiftyOptionData.getInstrumentName(exitAction.getPutOption(), false);
+				if (!ExitCache.isTestMode()) {
+					placeSellOrder(callInstrumentSymbol, exitAction.getCallOptionQty());
+					placeSellOrder(putInstrumentSymbol, exitAction.getPutOptionQty());
+					exitAction.setSellIfTotalReachesFlag(false);
+					logger.info("Sold");
+				} else {
+					logger.info("Running in Test Mode, Sell order will not be Placed");
+				}
 			}
 		}
 	}
@@ -149,16 +152,41 @@ public class LoginController {
 
 		bankNiftyData.setLtpPrice(bankNiftyLtpPrice);
 
-		String ltpURL = "https://api.kite.trade/quote/ltp?" + bankNiftyData.populateOptionData() + "&i="
-				+ bankNiftyData.getInstrumentName();
+		String populateOptionData = bankNiftyData.populateOptionData();
+//		String ltpURL = "https://api.kite.trade/quote/ltp?" + populateOptionData + "&i=" + bankNiftyData.getInstrumentName();
 
-		ResponseEntity<String> optionResponse = fetchLTPFromURL(ltpURL);
-		fillBankNiftyLtpPrice(bankNiftyData, optionResponse);
-
-		fillLastPriceOptionData(bankNiftyData, optionResponse);
-		validateAndPerformExit(bankNiftyData);
+//		ResponseEntity<String> optionResponse = fetchLTPFromURL(ltpURL);
+//		fillBankNiftyLtpPrice(bankNiftyData, optionResponse);
+		bankNiftyData.setLtpPrice(Cache.get(bankNiftyData.getInstrumentName()));
+//		fillLastPriceOptionData(bankNiftyData, optionResponse);
+		fillLastPriceOptionData(bankNiftyData);
+		validateAndPerformSellORExit(bankNiftyData);
 
 		return bankNiftyData;
+
+	}
+
+	@RequestMapping("/api/exitNow")
+	@CrossOrigin(origins = { "http://localhost:4200" })
+	public boolean exitNow() throws JSONException {
+
+		ExitAction exitAction = ExitCache.getExitAction();
+
+		logger.info("Exit Immediately triggerd");
+
+		if (exitAction.isExitActionEnabled()) {
+
+			String callInstrumentSymbol = BankNiftyOptionData.getInstrumentName(exitAction.getCallOption(), true);
+			String putInstrumentSymbol = BankNiftyOptionData.getInstrumentName(exitAction.getPutOption(), false);
+			placeBuyOrder(callInstrumentSymbol, exitAction.getCallOptionQty());
+			placeBuyOrder(putInstrumentSymbol, exitAction.getPutOptionQty());
+			exitAction.setExitActionEnabled(false);
+			logger.info("Exited");
+		} else {
+			logger.info("Exit Action is Disabled");
+		}
+
+		return true;
 
 	}
 
@@ -183,7 +211,9 @@ public class LoginController {
 			@RequestParam(value = "exitAtCallOption") String exitAtCallOption,
 			@RequestParam(value = "exitAtPutOption") String exitAtPutOption,
 			@RequestParam(value = "exitActionEnabled") String exitActionEnabled,
-			@RequestParam(value = "testMode") String testMode) throws JSONException {
+			@RequestParam(value = "testMode") String testMode,
+			@RequestParam(value = "sellIfTotalReachesFlag") String sellIfTotalReachesFlag,
+			@RequestParam(value = "sellIfTotalReachesAmount") String sellIfTotalReachesAmount) throws JSONException {
 
 		ExitCache.addExitData(ExitCache.BANK_NIFTY_UPPER_THRESHOLD, bankNiftyUpperThreshHold);
 		ExitCache.addExitData(ExitCache.BANK_NIFTY_LOWER_THRESHOLD, bankNiftyLowerThreshHold);
@@ -193,7 +223,8 @@ public class LoginController {
 		ExitCache.addExitData(ExitCache.EXIT_AT_PUT_OPTION, exitAtPutOption);
 		ExitCache.addExitData(ExitCache.TEST_MODE, testMode);
 		ExitCache.getExitAction().populateExitAction(callOptionSymbol, callOptionQty, putOptionSymbol, putOptionQty,
-				Boolean.parseBoolean(exitActionEnabled));
+				Boolean.parseBoolean(exitActionEnabled), Boolean.parseBoolean(sellIfTotalReachesFlag),
+				sellIfTotalReachesAmount);
 
 		logger.info("Exit Action Defined :" + ExitCache.convertToString());
 
@@ -217,6 +248,20 @@ public class LoginController {
 		}
 
 	}
+	
+	private void fillLastPriceOptionData(BankNiftyData bankNiftyData)
+			throws JSONException {
+		List<BankNiftyOptionData> callOptionData = bankNiftyData.getCallOptionData();
+		for (BankNiftyOptionData bankNiftyOptionData : callOptionData) {
+			bankNiftyOptionData.setLtpPrice(Cache.get(bankNiftyOptionData.getInstrumentName()));
+		}
+
+		List<BankNiftyOptionData> putOptionData = bankNiftyData.getPutOptionData();
+		for (BankNiftyOptionData bankNiftyOptionData : putOptionData) {
+			bankNiftyOptionData.setLtpPrice(Cache.get(bankNiftyOptionData.getInstrumentName()));
+		}
+
+	}
 
 	private Number getLastPrice(BankNiftyData bankNiftyData, JSONObject dataObject) throws JSONException {
 		JSONObject instrumentDetails = (JSONObject) dataObject.get(bankNiftyData.getInstrumentName());
@@ -234,7 +279,7 @@ public class LoginController {
 		String ltpURL = "https://api.kite.trade/quote/ltp?i={instr}";
 		HttpHeaders headers = new HttpHeaders();
 		headers.add("X-Kite-Version", "3");
-		headers.add("Authorization", "token " + API_KEY + ":" + accessToken);
+		headers.add("Authorization", KeyCache.getAuthorizationStr());
 		Map<String, String> params = new HashMap<>();
 		params.put("instr", instrument);
 		HttpMethod httpMethod = HttpMethod.GET;
@@ -250,7 +295,7 @@ public class LoginController {
 	private ResponseEntity<String> fetchLTPFromURL(String ltpURL) {
 		HttpHeaders headers = new HttpHeaders();
 		headers.add("X-Kite-Version", "3");
-		headers.add("Authorization", "token " + API_KEY + ":" + accessToken);
+		headers.add("Authorization", KeyCache.getAuthorizationStr());
 		HttpMethod httpMethod = HttpMethod.GET;
 
 		RestTemplate restTemplate = new RestTemplate();
@@ -280,8 +325,9 @@ public class LoginController {
 		String callOptionResponse = placeSellOrder(callOptionSymbol, callOptionQty);
 		String putOptionResponse = placeSellOrder(putOptionSymbol, putOptionQty);
 
-//		ExitCache.getExitAction().populateExitAction(callOptionSymbol, callOptionQty, putOptionSymbol, putOptionQty,
-//				true);
+		// ExitCache.getExitAction().populateExitAction(callOptionSymbol, callOptionQty,
+		// putOptionSymbol, putOptionQty,
+		// true);
 		return putOptionResponse;
 
 	}
@@ -319,7 +365,7 @@ public class LoginController {
 		String tradeURL = "https://api.kite.trade/orders/regular";
 		HttpHeaders headers = new HttpHeaders();
 		headers.add("X-Kite-Version", "3");
-		headers.add("Authorization", "token " + API_KEY + ":" + accessToken);
+		headers.add("Authorization", KeyCache.getAuthorizationStr());
 
 		params.add("order_type", "MARKET");
 		params.add("product", "MIS");

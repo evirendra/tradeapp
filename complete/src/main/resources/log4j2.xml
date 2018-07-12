@@ -26,6 +26,13 @@
 				</pattern>
 			</PatternLayout>
 		</File>
+		<File name="Cache-Appender" fileName="${path}/cache.log">
+			<PatternLayout>
+				<pattern>
+					[%-5level] %d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %c{1} - %msg%n
+				</pattern>
+			</PatternLayout>
+		</File>
 		<File name="SpringBoot-Appender"
 			fileName="${path}/springboot_log.log">
 			<PatternLayout>
@@ -52,6 +59,9 @@
 	<Loggers>
 		<Logger name="com.xxx" level="info">
 			<AppenderRef ref="Trade-Appender" />
+		</Logger>
+		<Logger name="com.qrtz.cache" level="info">
+			<AppenderRef ref="Cache-Appender" />
 		</Logger>
 		<Root level="info">
 			<AppenderRef ref="Console-Appender" />

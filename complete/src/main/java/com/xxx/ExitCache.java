@@ -26,8 +26,12 @@ public class ExitCache {
 		data.put(key, value);
 	}
 
-	public static boolean shouldExit(BankNiftyData bankNiftyData) {
-		boolean exit = false;
+	/**
+	 * returns 1 for exit(buy) . returns 2 to sell based on amount  , returns 0 - do not take any action 
+	 * @param bankNiftyData
+	 * @return
+	 */
+	public static int determineAction(BankNiftyData bankNiftyData) {
 		Number ltpPrice = bankNiftyData.getLtpPrice();
 		BankNiftyPosition  bankNiftyPosition = new BankNiftyPosition();
 
@@ -37,11 +41,11 @@ public class ExitCache {
 
 			if (!StringUtils.isEmpty(upperLevel) && ltpPrice.doubleValue() >= Long.parseLong(upperLevel)) {
 				logger.info("Upper Threshhold Reached- Must Exit :" + ltpPrice);
-				return true;
+				return 1;
 			}
 			if (!StringUtils.isEmpty(lowerLevel) && ltpPrice.doubleValue() <= Long.parseLong(lowerLevel)) {
 				logger.info("Lower Threshhold Reached- Must Exit :" + ltpPrice);
-				return true;
+				return 1;
 			}
 
 			String exitCallOption = getExitAction().getCallOption();
@@ -55,7 +59,7 @@ public class ExitCache {
 				if (!StringUtils.isEmpty(data.get(EXIT_AT_CALL_OPTION))
 						&& callOptionLtpPrice >= Double.parseDouble(data.get(EXIT_AT_CALL_OPTION))) {
 					logger.info("Call Option Upper  threshold Reached- Must Exit :");
-					return true;
+					return 1;
 				}
 			}
 			String exitPutOption = getExitAction().getPutOption();
@@ -67,7 +71,7 @@ public class ExitCache {
 				if (!StringUtils.isEmpty(data.get(EXIT_AT_PUT_OPTION))
 						&& putOptionLtpPrice >= Double.parseDouble(data.get(EXIT_AT_PUT_OPTION))) {
 					logger.info("Put Option Upper  threshold Reached- Must Exit :");
-					return true;
+					return 1;
 				}
 			}
 
@@ -77,18 +81,25 @@ public class ExitCache {
 				if (!StringUtils.isEmpty(data.get(OPTION_TOTAL_UPPER))
 						&& optionTotal >= Double.parseDouble(data.get(OPTION_TOTAL_UPPER))) {
 					logger.info(" Option total  Upper  threshold Reached- Must Exit :");
-					return true;
+					return 1;
 				}
 
 				if (!StringUtils.isEmpty(data.get(OPTION_TOTAL_LOWER))
 						&& optionTotal <= Double.parseDouble(data.get(OPTION_TOTAL_LOWER))) {
 					logger.info(" Option total  Lower  threshold Reached- Must Exit :");
-					return true;
+					return 1;
+				}
+				boolean sellIfTotalReachesFlag = exitAction.isSellIfTotalReachesFlag();
+				if(sellIfTotalReachesFlag) {
+					String sellIfTotalReachesAmount = exitAction.getSellIfTotalReachesAmount();
+					if(!StringUtils.isEmpty(sellIfTotalReachesAmount) && optionTotal  >= Double.parseDouble(sellIfTotalReachesAmount)) {
+						return 2;
+					}
 				}
 			}
 		}
 		bankNiftyData.setBankNiftyPosition(bankNiftyPosition);
-		return exit;
+		return 0;
 	}
 
 	private static Double getOptionLTPPrice(long option, List<BankNiftyOptionData> callOptionData) {
